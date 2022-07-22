@@ -24,7 +24,7 @@ GIF Images
 
 | SpringBoot | MySQL |  Spring data JPA   |  PostMan   | JMeter |
 | :--------: | :--------: | :------: | :-----: | :-----: |
-|   ![sb]    |   ![my]    | ![dj] | ![pos] | ![jm] |
+|   ![sb]    |   ![my]    |   ![dj]    |   ![pos]    |   ![jm]    |
 
 <br>
 
