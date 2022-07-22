@@ -9,7 +9,7 @@
 ## 프로젝트 소개
 
 <p align="justify">
-  <h3 style="color: green;">기본적인 CRUD 기능</h3>, 첨부파일은 <strong style="color: green;">Amazon s3를 통해서 진행</strong>하였습니다.
+  <span style="color:green">기본적인 CRUD 기능</span>, 첨부파일은 <strong style="color: green;">Amazon s3를 통해서 진행</strong>하였습니다.
   
   데이터베이스는 로컬에서 MySQL을 이용하였으며, 만들어가는데 있어서,
   
