@@ -56,6 +56,6 @@ MIT &copy; [NoHack](mailto:lbjp114@gmail.com)
 
 [sb]: /images/stack/springboot.svg
 [my]: /images/stack/mysql.svg
-[dj]: /images/stack/data jpa.svg
+[dj]: /images/stack/datajpa.svg
 [pos]: /images/stack/postman.svg
 [jm]: /images/stack/apachejmeter.svg
