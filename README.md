@@ -24,7 +24,7 @@ GIF Images
 
 | SpringBoot | MySQL |  Spring data JPA   |  PostMan   | JMeter |
 | :--------: | :--------: | :------: | :-----: | :-----: |
-|   ![js]    |   ![ts]    | ![react] | ![node] | ![node] |
+|   ![sb]    |   ![my]    | ![dj] | ![pos] | ![jm] |
 
 <br>
 
@@ -54,7 +54,8 @@ MIT &copy; [NoHack](mailto:lbjp114@gmail.com)
 
 <!-- Stack Icon Refernces -->
 
-[js]: /images/stack/javascript.svg
-[ts]: /images/stack/typescript.svg
-[react]: /images/stack/react.svg
-[node]: /images/stack/node.svg
+[sb]: /images/stack/springboot.svg
+[my]: /images/stack/mysql.svg
+[dj]: /images/stack/data jpa.svg
+[pos]: /images/stack/postman.svg
+[jm]: /images/stack/apachejmeter.svg
