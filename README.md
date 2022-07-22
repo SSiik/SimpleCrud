@@ -9,7 +9,7 @@
 ## 프로젝트 소개
 
 <p align="justify">
- 기본적인 CRUD 기능존재, 첨부파일은 Amazon s3를 통해서 진행하였습니다.
+  <strong>기본적인 CRUD 기능</strong>, 첨부파일은 <strong>Amazon s3를 통해서 진행</strong>하였습니다.
   
   데이터베이스는 로컬에서 MySQL을 이용하였으며, 만들어가는데 있어서,
   
