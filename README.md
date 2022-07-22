@@ -1,4 +1,4 @@
-# 프로젝트 이름
+# 게시판 REST API 작성하기
 
 <p align="center">
   <br>
@@ -22,9 +22,9 @@ GIF Images
 
 ## 기술 스택
 
-| JavaScript | TypeScript |  React   |  Node   |
-| :--------: | :--------: | :------: | :-----: |
-|   ![js]    |   ![ts]    | ![react] | ![node] |
+| SpringBoot | MySQL |  Spring data JPA   |  PostMan   | JMeter |
+| :--------: | :--------: | :------: | :-----: | :-----: |
+|   ![js]    |   ![ts]    | ![react] | ![node] | ![node] |
 
 <br>
 
