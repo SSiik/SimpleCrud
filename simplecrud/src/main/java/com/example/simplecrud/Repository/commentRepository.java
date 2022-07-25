@@ -20,6 +20,7 @@ public interface commentRepository extends JpaRepository<comment,Long> {
     @Modifying
     @Query(nativeQuery = true,value = "delete from comment where board_id =:id")
     void deleteAllByBoard(@Param("id") Long id);
+    /* 계층형 댓글 삭제에 관련해서*/
 
     @Query(value = "select c from comment c join fetch c.board where c.id=:id")
     Optional<comment> findByIdWithBoard(@Param("id") Long id);

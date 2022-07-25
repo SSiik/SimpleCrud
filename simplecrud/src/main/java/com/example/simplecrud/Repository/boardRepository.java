@@ -23,6 +23,7 @@ public interface boardRepository extends JpaRepository<board,Long>,boardReposito
     @Query(value = "select b from board b")
     Page<board> findAllByPage(Pageable pageable);
 
+
     @Query(value = "select b from board b where b.title LIKE %:content% OR b.content LIKE %:content%")
     Page<board> findPostByContent(Pageable pageable,@Param("content") String content);
 
@@ -32,6 +33,8 @@ public interface boardRepository extends JpaRepository<board,Long>,boardReposito
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(value = "select distinct b from board b left join fetch b.list where b.id =:id")
     Optional<board> findBoardWithFiles(@Param("id") Long id); //파일이없으면 안나오는걸 방지해 left를 붙였다.
+
+
 
 
 }

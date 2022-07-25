@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.persistence.EntityManager;
 import javax.persistence.OptimisticLockException;
 import javax.validation.constraints.Null;
 import java.io.FileInputStream;
@@ -65,6 +66,7 @@ import java.util.*;
 public class BoardService {
     private final AwsS3Service awsS3Service; //일단 서비스가 서비스에 의존하는형태.
 
+    private final EntityManager em;
     private final userRepository userRepository;
     private final fileJDbcRepository fileJDbcRepository;
     private final boardRepository boardRepository;
@@ -78,98 +80,74 @@ public class BoardService {
     * 수정이 많을시 -> PESSIMISTIC LOCK이 적절, 일반적인 웹 애플리케이션은 optimistic Lock을 주로 사용한다고 하네요.
     * 이제 게시글을 가져올때 댓글까지 락을 걸거냐 뭐 이런게 생각해볼만한 여지가 될것같습니다.
     * */
+
+    public board validationUpdateBoard(String ide,Long id){
+        Optional<board> byId = boardRepository.findById(id);
+        log.info("게시글 , 사용자를 동시에 확인하는중입니다!!!!!!!!!!!!");
+        if (byId.isEmpty()) throw new RuntimeException("해당하는 게시글을 찾을수없습니다.");
+        if (!byId.get().getWriter().equals(ide)) throw new RuntimeException("수정권한이 없는 사용자입니다.");
+        return byId.get(); //정말로 있는지 검증. 있다면 Id를 return.
+    }
+
+    public Object validationBoardWithComment(Long board_id,@Nullable Long comment_id){
+        if(comment_id == null){ //루트댓글을 위한 검증을 실시.
+            board board = boardRepository.findById(board_id)
+                    .orElseThrow(() -> new RuntimeException("게시글이 존재하지 않습니다."));
+            return board;
+        }
+        else{
+            comment comment = commentRepository.findByIdWithBoard(comment_id)
+                    .orElseThrow(() -> new RuntimeException("존재하지 않는 댓글 혹은 게시글 입니다."));
+            return comment;
+        }
+        //Object를 반환하는걸로 서로 다른 Entity를 반환하게 한다.
+    }
+
+    public comment validationBoardWithDelete(Long comment_id,String ide){
+        comment comment = commentRepository.findByIdWithBoard(comment_id)
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 댓글 혹은 게시글입니다."));//여기서 오면 게시글까지 있다는거.
+        if(!comment.getWriter().equals(ide)){
+            throw new RuntimeException("삭제권한이 없는 사용자입니다.");
+        }
+        return comment;
+    }
+
+
     @Transactional
     @Async   //비동기로 박아줫다, async메소드에선 파라미터로 MultipartFile이 리소스가 릴리즈되버려서, DTO로 받아온모습.
     public void post(String writer, String title, String content,
-                     @Nullable List<fileTransferDto> files, @Nullable Long board_id) throws IOException {
-        if (board_id == null) {
-            board board = new board(writer, title, 0, 0 ,content, false);
-            if (files == null) {
-                boardRepository.save(board);
-            } else {
-                board.setHaveFile(true); //이렇게 flag를 만들어보자.
-                boardRepository.save(board);
-                boardAndFileDto dto = new boardAndFileDto();
-                System.out.println("실행흐름좀 봅시다 post함수 내부 두번째문장!!");
-                dto.setWriter(writer);
-                dto.setContent(content);
-                dto.setTitle(title);
-                List<file> lists = new ArrayList<>();
-                for (fileTransferDto file : files) {
-                    fileSaveDto to = new fileSaveDto();
-                    String originalName = file.getOriginalFileName();
-                    log.info("실제 파일저장 시작입니다..");
-                    AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
-                    file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
-                    board.getList().add(fileInfo);
-                    fileInfo.setBoard(board); //외래키 설정.
-                    lists.add(fileInfo);
-                }
-                System.out.println("실행흐름좀 봅시다 post함수 내부 세번째문장!!");
-                fileJDbcRepository.saveAll(lists); //bulk insert를 IDENTITY전략속에서, JDBCtemplate을 이용.
+                     @Nullable List<fileTransferDto> files) throws IOException {
+        board board = new board(writer, title, 0, 0, content, false);
+        if (files == null) {
+            boardRepository.save(board);
+        } else {
+            board.setHaveFile(true); //이렇게 flag를 만들어보자.
+            boardRepository.save(board);
+            boardAndFileDto dto = new boardAndFileDto();
+            dto.setWriter(writer);
+            dto.setContent(content);
+            dto.setTitle(title);
+            List<file> lists = new ArrayList<>();
+            for (fileTransferDto file : files) {
+                fileSaveDto to = new fileSaveDto();
+                String originalName = file.getOriginalFileName();
+                log.info("실제 파일저장 시작입니다..");
+                AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
+                file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
+                board.getList().add(fileInfo);
+                fileInfo.setBoard(board); //외래키 설정.
+                lists.add(fileInfo);
             }
+            System.out.println("실행흐름좀 봅시다 post함수 내부 세번째문장!!");
+            fileJDbcRepository.saveAll(lists); //bulk insert를 IDENTITY전략속에서, JDBCtemplate을 이용.
         }
-        // 2.수정으로 작동
-        else {
-            //수정권한이 있는지 여기서 체크를 한번 해야할거 같다.
-            Optional<board> byId = boardRepository.findById(board_id);
-            if (byId.isEmpty()) throw new RuntimeException("해당하는 게시글을 찾을수없습니다.");
-            if (!byId.get().getWriter().equals(writer)) throw new RuntimeException("수정권한이 없는 사용자입니다.");
+    }
 
-            board board = byId.get();
-            board.setTitle(title);
-            board.setContent(content);
-            if (files != null) { //새로 들어오는 첨부파일이 있다는 얘기.
-                if (!board.isHaveFile()) {
-                    //1 . 게시글은 있지만 첨부파일은 없었던경우. 그러면 이제 들어온 파일은 다 넣어주면 됩니다.
-                    List<file> lists = new ArrayList<>();
-                    List<file> parts = new ArrayList<>();
-                    for (fileTransferDto file : files) {
-                        String originalName = file.getOriginalFileName();
-                        log.info("실제 파일저장 시작입니다..");
-                        AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
-                        file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
-                        parts.add(fileInfo);
-                        fileInfo.setBoard(board); //외래키 설정.
-                        lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
-                    }
-                    board.setHaveFile(true);
-                    board.setList(parts);
-                    fileJDbcRepository.saveAll(lists); //bulk insert를 IDENTITY전략속에서, JDBCtemplate을 이용.
-                } else {
-                    //2 . 게시글도 있고, 첨부파일도 기존에 있었던경우. 이러면 좀 갈아줘야합니다.
-                    List<file> parts = new ArrayList<>();
-                    awsS3Service.deleteAll("upload", board.getId()); //사전작업1, s3에 파일삭제
-                    fileRepository.deleteAllByBoard(board_id); //사전작업2 , DB에서 bulk delete.
-                    //자 이 bulk연산이후에 자동 flush를 하지 않을겁니다. 일부러.
-                    // 그리고 영속성컨텍스트도 안비울겁니다 일부러.
-
-                    board.setList(parts);  //board관련 file들을 가져오기 싫기때문에, 그냥 아애 비어있는 list를 채워버리는 느낌?
-                    //설마 프록시와 충돌하려나?
-                    List<file> lists = new ArrayList<>();
-                    for (fileTransferDto file : files) {
-                        String originalName = file.getOriginalFileName();
-                        log.info("실제 파일저장 시작입니다..");
-                        AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
-                        file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
-                        board.getList().add(fileInfo); //앞에서 비운후에 새롭게 넣어줍니다.
-                        fileInfo.setBoard(board); //외래키 설정.
-                        lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
-                    }
-                    fileJDbcRepository.saveAll(lists);
-                }
-            } else { //넘어온 첨부파일이 없는경우.
-                List<file> parts = new ArrayList<>();
-                board.setHaveFile(false);
-                board.setList(parts); //여기도 일단 좀 강제로 setting해주는 느낌으로 갑시다. 우린 일대다 fetch join을 하기싫기때문에 이렇게했다.
-                //기존에도 없었던 경우면 사실상 처리할 필요가없습니다.
-                if (board.isHaveFile()) { //기존에 파일이 있었다면?
-                    awsS3Service.deleteAll("upload", board.getId()); //기존에 있던 파일을 삭제.
-                    fileRepository.deleteAllByBoard(board_id);             //기존에 있던 파일정보를 DB에서 삭제.
-                }
-            }
-
-        }
+    @Transactional
+    public void update(String writer, String title, String content,
+                     @Nullable List<fileTransferDto> files,Long board_id) throws IOException {
+        board board = validationUpdateBoard(writer, board_id);
+        doUpdate(title, content, files, board);
     }
 
     //게시글 수정시 적은글에 대한 정보를 반환.
@@ -203,22 +181,9 @@ public class BoardService {
     //여기서 하나 잡을가정이, 글삭제를 뭐 글상세보기에서 하든, 마이페이지에서 하던간에. 이 2개의 페이지에는 글쓴사람의 ide가 있을거다.
     //이걸 같이 넘겨줘서 비교하는걸로 갑시다. 권한있는지 판단하는건 이건 솔직히 너무 힘든거 같긴합니다. 이거 찾으로 쿼리타는게.
     @Transactional
-    @Async
-    public void deleteBoard(Long board_id, String ide, boolean isHaveFile) { //글에 대한 정보를 넘기는거 프론트입장에서.
-        List<file> parts = new ArrayList<>();
-        // 여기서 비동기처리..? 확인은 해야하는데
-        if (isHaveFile) { //게시글을 list로 보여주거나, 게시글 상세보기에서 isHaveFile정보를 넘겻고, 그걸 다시받아서 이미지가 있는지 판단.
-            //일단 s3에서 파일들 다 삭제.
-            fileRepository.deleteAllByBoard(board_id);
-            awsS3Service.deleteAll("upload", board_id);
-            //일대다 페치 조인(컬렉션 페치조인)으로 해서, 가져오고 cascade를 이용해서, '일'을 삭제하면 '다'를 삭제할수는있지만,
-            //이걸 '다'쪽이 계속 단퀀커리가 계속 날라가서 너무 비효율적입니다. 사실상 그래서 네트워크를 또 타더라도, @Modifying으로 진행하자.
-            //게시글 수정때 처럼, 그냥 bulk delete를 해서 board관련 file을 다 지우고, 그 이후에 board도 지우는 방식으로 갑시다.
-            //쿼리를 2번이나 타긴하지만, 일대다 상황에서 risk를 감수하는거보단 날겁니다.
-        }
-        commentRepository.deleteAllByBoard(board_id);
-        boardRepository.deleteById(board_id);//삭제해버립니다.
-
+    public void deleteBoard(Long board_id, String ide) {
+        board board = validationUpdateBoard(ide, board_id);
+        doDelete(board);
         /*
          * 게시글 삭제 과정
          * 1. s3에서 board관련 파일 전부삭제
@@ -248,21 +213,29 @@ public class BoardService {
     }
 
     @Transactional
-    @Async  //등록을 하는과정은 비동기로 한번 처리해봅시다.
-    public void doComment(String ide, String content, Long board_id, Long comment_id) {
-        //Optional의 orElseThorw를 통해서 바로 Entity로 받을수 있습니다.
-        board board = boardRepository.findById(board_id)
-                .orElseThrow(() -> new RuntimeException("존재하지 않는 게시글입니다."));
+     //등록을 하는과정은 비동기로 한번 처리해봅시다. 여기 검증로직부터 다시 해야함.
+    public void doComment(String ide, String content, Long board_id, @Nullable Long comment_id) {
         if (comment_id == null) { //대댓글이아님.
-            comment comment = new comment(content, board, ide,false); //일단기본적인 값들 설정.
-            commentRepository.save(comment);
-            //가져올때는 아마 아이디 오름차순으로 가져올수도.
+            board board = (board)validationBoardWithComment(board_id, null);
+            executeComment(ide, content, board,null);
+
         } else { //대댓글 상황, 대상이존재.
-            comment parentcomment = commentRepository.findById(comment_id)
-                    .orElseThrow(() -> new RuntimeException("대상 댓글이 존재하지않습니다."));
-            comment comment = new comment(content, board, ide,false);
-            comment.setRelationship(parentcomment); //여기서 서로 부모를추가하고, 자식을 추가하는 관계를 맺음.
-            commentRepository.save(comment);
+            comment parentcomment = (comment)validationBoardWithComment(board_id, comment_id);
+            executeComment(ide, content, parentcomment.getBoard(), parentcomment);
+        }
+
+    }
+
+    @Async
+    public void executeComment(String ide, String content, board board , @Nullable comment parentComment) {
+        if(parentComment == null) {
+            comment comm = new comment(content, board, ide, false); //일단기본적인 값들 설정.
+            commentRepository.save(comm);
+        }
+        else{ //comment가 있는경우는 대댓글 작성으로 동작.
+            comment comm = new comment(content, board, ide,false);
+            comm.setRelationship(parentComment); //여기서 서로 부모를추가하고, 자식을 추가하는 관계를 맺음.
+            commentRepository.save(comm);
         }
         try {
             board.setCommentNum(board.getCommentNum() + 1);
@@ -272,25 +245,25 @@ public class BoardService {
         }
     }
 
-    @Transactional @Async
+    @Transactional
     public void deleteComment(Long comment_id,String ide){ //댓글에 관련된 대댓글은 삭제하지 않도록.
-        comment comment = commentRepository.findByIdWithBoard(comment_id)
-                .orElseThrow(() -> new RuntimeException("존재하지 않는 댓글입니다."));
-        if(comment.getWriter().equals(ide)){
-            //실제로 우린 삭제하지 않고, "임의의 데이터로" 바꿔서 넣게 될겁니다. 다른게시판들처럼 삭제된 댓글입니다로 치환할 생각입니다.
-            comment.setContent(""); comment.setDeleted(true);
-            try {
-                comment.getBoard().setCommentNum(comment.getBoard().getCommentNum() - 1); //댓글삭제했으므로 하나를 지움.
-            } catch(OptimisticLockException e){
-                board entity = (board) e.getEntity();
-                entity.setCommentNum(entity.getCommentNum()+1);
-            }
-        }
-        else{
-            throw new RuntimeException("삭제권한이 없는 사용자입니다.");
-        }
-
+        comment comment = validationBoardWithDelete(comment_id, ide);
+        //실제로 우린 삭제하지 않고, "임의의 데이터로" 바꿔서 넣게 될겁니다. 다른게시판들처럼 삭제된 댓글입니다로 치환할 생각입니다.
+        doDelete(comment);
     }
+
+    @Async
+    private void doDelete(comment comment) {  //동시성에 대한 PESSIMISTIC LOCK을 걸어야할까?
+        comment.setContent("");
+        comment.setDeleted(true);
+        try {
+            comment.getBoard().setCommentNum(comment.getBoard().getCommentNum() - 1); //댓글삭제했으므로 하나를 지움.
+        } catch(OptimisticLockException e){
+            board entity = (board) e.getEntity();
+            entity.setCommentNum(entity.getCommentNum()+1);
+        }
+    }
+
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public checkDto findPost(Long id) {
@@ -317,10 +290,8 @@ public class BoardService {
             }
             checkDto.setFiles(files);
         }
+    // 최상위 계층의 댓글을 가져오고,
 
-    /*
-    *  최상위 계층의 댓글을 가져오고,
-    * */
         List<comment> comments = commentRepository.findCommentByBoard_id(id);
         List<commentResponseDto> commentResponseDtos = convertNestedStructure(comments);
         checkDto.setComments(commentResponseDtos);
@@ -334,7 +305,6 @@ public class BoardService {
 //            entity.setVisited(entity.getVisited()+1);
             System.out.println("e.getMessage() = " + e.getMessage());
       }
-
         return checkDto;
     }
 
@@ -359,4 +329,78 @@ public class BoardService {
         return commentDto;
     }
 
+
+    @Async
+    public void doUpdate(String title, String content, @Nullable List<fileTransferDto> files, board board) throws IOException {
+        if (files != null) { //새로 들어오는 첨부파일이 있다는 얘기.
+            if (!board.isHaveFile()) {
+                //1 . 게시글은 있지만 첨부파일은 없었던경우. 그러면 이제 들어온 파일은 다 넣어주면 됩니다.
+                List<file> lists = new ArrayList<>();
+                List<file> parts = new ArrayList<>();
+                for (fileTransferDto file : files) {
+                    String originalName = file.getOriginalFileName();
+                    log.info("실제 파일저장 시작입니다..");
+                    AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
+                    file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
+                    parts.add(fileInfo);
+                    fileInfo.setBoard(board); //외래키 설정.
+                    lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
+                }
+                board.setTitle(title);
+                board.setContent(content);
+                board.setHaveFile(true);
+                board.setList(parts);
+                fileJDbcRepository.saveAll(lists); //bulk insert를 IDENTITY전략속에서, JDBCtemplate을 이용.
+            } else {
+                //2 . 게시글도 있고, 첨부파일도 기존에 있었던경우. 이러면 좀 갈아줘야합니다.
+                List<file> parts = new ArrayList<>();
+                awsS3Service.deleteAll("upload", board.getId()); //사전작업1, s3에 파일삭제
+                fileRepository.deleteAllByBoard(board.getId()); //사전작업2 , DB에서 bulk delete.
+                //자 이 bulk연산이후에 자동 flush를 하지 않을겁니다. 일부러.
+                // 그리고 영속성컨텍스트도 안비울겁니다 일부러.
+                board.setTitle(title);
+                board.setContent(content);
+                board.setList(parts);  //board관련 file들을 가져오기 싫기때문에, 그냥 아애 비어있는 list를 채워버리는 느낌?
+                //설마 프록시와 충돌하려나?
+                List<file> lists = new ArrayList<>();
+                for (fileTransferDto file : files) {
+                    String originalName = file.getOriginalFileName();
+                    log.info("실제 파일저장 시작입니다..");
+                    AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
+                    file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
+                    board.getList().add(fileInfo); //앞에서 비운후에 새롭게 넣어줍니다.
+                    fileInfo.setBoard(board); //외래키 설정.
+                    lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
+                }
+                fileJDbcRepository.saveAll(lists);
+            }
+        } else { //넘어온 첨부파일이 없는경우.
+            List<file> parts = new ArrayList<>();
+            board.setTitle(title);
+            board.setContent(content);
+            board.setHaveFile(false);
+            board.setList(parts); //여기도 일단 좀 강제로 setting해주는 느낌으로 갑시다. 우린 일대다 fetch join을 하기싫기때문에 이렇게했다.
+            //기존에도 없었던 경우면 사실상 처리할 필요가없습니다.
+            if (board.isHaveFile()) { //기존에 파일이 있었다면?
+                awsS3Service.deleteAll("upload", board.getId()); //기존에 있던 파일을 삭제.
+                fileRepository.deleteAllByBoard(board.getId());             //기존에 있던 파일정보를 DB에서 삭제.
+            }
+        }
+    }
+
+    @Async
+    public void doDelete(board board) {
+        List<file> parts = new ArrayList<>();
+        if (board.isHaveFile()) {
+            //일단 s3에서 파일들 다 삭제.
+            fileRepository.deleteAllByBoard(board.getId());
+            awsS3Service.deleteAll("upload", board.getId());
+            //일대다 페치 조인(컬렉션 페치조인)으로 해서, 가져오고 cascade를 이용해서, '일'을 삭제하면 '다'를 삭제할수는있지만,
+            //이걸 '다'쪽이 계속 단퀀커리가 계속 날라가서 너무 비효율적입니다. 사실상 그래서 네트워크를 또 타더라도, @Modifying으로 진행하자.
+            //게시글 수정때 처럼, 그냥 bulk delete를 해서 board관련 file을 다 지우고, 그 이후에 board도 지우는 방식으로 갑시다.
+            //쿼리를 2번이나 타긴하지만, 일대다 상황에서 risk를 감수하는거보단 날겁니다.
+        }
+        commentRepository.deleteAllByBoard(board.getId());
+        boardRepository.deleteById(board.getId());//삭제해버립니다.
+    }
 }
