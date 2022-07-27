@@ -6,6 +6,7 @@ import com.example.simplecrud.Domain.Entity.board;
 import com.example.simplecrud.Service.AwsS3Service;
 import com.example.simplecrud.Service.BoardService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Required;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class boardController {
     private final BoardService boardService;
 
@@ -53,6 +55,9 @@ public class boardController {
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         //댓글id가 넘어오냐 안오냐에 따라서 대댓글인지 댓글인지 판단합니다.
         //일반 댓글이라면 아직 id가 없고, 대댓글이면 대상댓글에 id가 존재하겠죠.
+
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if(commentDto.getComment_id()==null) {
             boardService.doComment(ide,commentDto.getContent(),commentDto.getBoard_id(),null);
         }
@@ -64,6 +69,8 @@ public class boardController {
 
     @DeleteMapping("board/private/comment")   //DeleteMapping을 이용.
     public String commentPost(Long id,HttpServletRequest request){
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         //댓글id가 넘어오냐 안오냐에 따라서 대댓글인지 댓글인지 판단합니다.
         //일반 댓글이라면 아직 id가 없고, 대댓글이면 대상댓글에 id가 존재하겠죠.
@@ -75,6 +82,8 @@ public class boardController {
     @PostMapping("/board/private/post")
     public String post(@Validated @ModelAttribute postDto postDto ,
                        HttpServletRequest request) throws IOException {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         List<fileTransferDto> files = new ArrayList<>();
         if(postDto.getFiles() != null) {
@@ -93,6 +102,8 @@ public class boardController {
     @PostMapping("/board/private/update")
     public String update(@Validated @ModelAttribute postDto postDto,HttpServletRequest request,
                          Long board_id) throws IOException {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         //board_id가 파라미터로 필요할까?
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         List<fileTransferDto> files = new ArrayList<>();
@@ -119,6 +130,8 @@ public class boardController {
 
     @PostMapping("/board/private/delete")
     public String delete(HttpServletRequest request,Long board_id) throws IOException {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         String ide = (String)request.getAttribute("userId"); //정보 획득. 비동기메소드 전까지는 동기적으로 실행된다.
         boardService.deleteBoard(board_id,ide);
         return "OK";

@@ -82,6 +82,8 @@ public class BoardService {
     * */
 
     public board validationUpdateBoard(String ide,Long id){
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         Optional<board> byId = boardRepository.findById(id);
         log.info("게시글 , 사용자를 동시에 확인하는중입니다!!!!!!!!!!!!");
         if (byId.isEmpty()) throw new RuntimeException("해당하는 게시글을 찾을수없습니다.");
@@ -90,6 +92,8 @@ public class BoardService {
     }
 
     public Object validationBoardWithComment(Long board_id,@Nullable Long comment_id){
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if(comment_id == null){ //루트댓글을 위한 검증을 실시.
             board board = boardRepository.findById(board_id)
                     .orElseThrow(() -> new RuntimeException("게시글이 존재하지 않습니다."));
@@ -104,7 +108,9 @@ public class BoardService {
     }
 
     public comment validationBoardWithDelete(Long comment_id,String ide){
-        comment comment = commentRepository.findByIdWithBoard(comment_id)
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
+        comment comment = commentRepository.findByIdWithBoardToDelete(comment_id)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 댓글 혹은 게시글입니다."));//여기서 오면 게시글까지 있다는거.
         if(!comment.getWriter().equals(ide)){
             throw new RuntimeException("삭제권한이 없는 사용자입니다.");
@@ -118,6 +124,8 @@ public class BoardService {
     public void post(String writer, String title, String content,
                      @Nullable List<fileTransferDto> files) throws IOException {
         board board = new board(writer, title, 0, 0, content, false);
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if (files == null) {
             boardRepository.save(board);
         } else {
@@ -215,6 +223,8 @@ public class BoardService {
     @Transactional
      //등록을 하는과정은 비동기로 한번 처리해봅시다. 여기 검증로직부터 다시 해야함.
     public void doComment(String ide, String content, Long board_id, @Nullable Long comment_id) {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if (comment_id == null) { //대댓글이아님.
             board board = (board)validationBoardWithComment(board_id, null);
             executeComment(ide, content, board,null);
@@ -228,6 +238,8 @@ public class BoardService {
 
     @Async
     public void executeComment(String ide, String content, board board , @Nullable comment parentComment) {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if(parentComment == null) {
             comment comm = new comment(content, board, ide, false); //일단기본적인 값들 설정.
             commentRepository.save(comm);
@@ -254,8 +266,10 @@ public class BoardService {
 
     @Async
     private void doDelete(comment comment) {  //동시성에 대한 PESSIMISTIC LOCK을 걸어야할까?
-        comment.setContent("");
-        comment.setDeleted(true);
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
+        comment.findDeletableComment().ifPresentOrElse(c -> commentRepository.delete(c), () -> comment.delete());
+        //ifPresentOrElse로 Empty 일수도 그러면 그냥, 현재 댓글만 임시상태표시로. 삭제가능한 지점을 찾으면 Repository이용.
         try {
             comment.getBoard().setCommentNum(comment.getBoard().getCommentNum() - 1); //댓글삭제했으므로 하나를 지움.
         } catch(OptimisticLockException e){
@@ -332,6 +346,8 @@ public class BoardService {
 
     @Async
     public void doUpdate(String title, String content, @Nullable List<fileTransferDto> files, board board) throws IOException {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         if (files != null) { //새로 들어오는 첨부파일이 있다는 얘기.
             if (!board.isHaveFile()) {
                 //1 . 게시글은 있지만 첨부파일은 없었던경우. 그러면 이제 들어온 파일은 다 넣어주면 됩니다.
@@ -390,6 +406,8 @@ public class BoardService {
 
     @Async
     public void doDelete(board board) {
+        System.out.println(Thread.currentThread().getId());
+        System.out.println("=========================================================================");
         List<file> parts = new ArrayList<>();
         if (board.isHaveFile()) {
             //일단 s3에서 파일들 다 삭제.
