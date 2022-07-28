@@ -2,25 +2,19 @@ package com.example.simplecrud.controller.BoardController;
 
 import com.example.simplecrud.Domain.Dto.*;
 
-import com.example.simplecrud.Domain.Entity.board;
-import com.example.simplecrud.Service.AwsS3Service;
 import com.example.simplecrud.Service.BoardService;
+import com.example.simplecrud.Service.totalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Required;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.Nullable;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,6 +23,7 @@ import java.util.List;
 @Slf4j
 public class boardController {
     private final BoardService boardService;
+    private final totalService totalService;
 
     @GetMapping("board/list")
     public ResponseEntity<Page<listDto>> getPosts(int page){
@@ -49,7 +44,7 @@ public class boardController {
         return post;
     }
 
-    //댓글 입력 , 어떤정보를 줄거냐에 따라 요청을 상상해볼수 있습니다.
+    //댓글 작성
     @PostMapping("board/private/comment")
     public String commentPost(@Validated commentDto commentDto,HttpServletRequest request){
         String ide = (String)request.getAttribute("userId"); //정보 획득.
@@ -67,7 +62,7 @@ public class boardController {
         return "OK";
     }
 
-    @DeleteMapping("board/private/comment")   //DeleteMapping을 이용.
+    @DeleteMapping("board/private/comment")   //댓글 삭제
     public String commentPost(Long id,HttpServletRequest request){
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
@@ -79,7 +74,7 @@ public class boardController {
     }
 
     //인터셉터에서 로그인여부판단, 여기선 로그인이 됬다고 판단 진행
-    @PostMapping("/board/private/post")
+    @PostMapping("/board/private/post") //글 작성
     public String post(@Validated @ModelAttribute postDto postDto ,
                        HttpServletRequest request) throws IOException {
         System.out.println(Thread.currentThread().getId());
@@ -99,7 +94,7 @@ public class boardController {
         return "OK";
     }
 
-    @PostMapping("/board/private/update")
+    @PostMapping("/board/private/update")  //글 업데이트
     public String update(@Validated @ModelAttribute postDto postDto,HttpServletRequest request,
                          Long board_id) throws IOException {
         System.out.println(Thread.currentThread().getId());
@@ -116,7 +111,7 @@ public class boardController {
                 files.add(dto);
             }
         }
-        boardService.update(ide,postDto.getTitle(),postDto.getContent(),files,board_id);
+        totalService.update(ide,postDto.getTitle(),postDto.getContent(),files,board_id);
         return "OK";
     }
 
@@ -128,7 +123,7 @@ public class boardController {
 
     }
 
-    @PostMapping("/board/private/delete")
+    @PostMapping("/board/private/delete")  //글 삭제
     public String delete(HttpServletRequest request,Long board_id) throws IOException {
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");

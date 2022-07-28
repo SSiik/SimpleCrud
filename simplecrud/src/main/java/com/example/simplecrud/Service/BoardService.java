@@ -151,12 +151,12 @@ public class BoardService {
         }
     }
 
-    @Transactional
-    public void update(String writer, String title, String content,
-                     @Nullable List<fileTransferDto> files,Long board_id) throws IOException {
-        board board = validationUpdateBoard(writer, board_id);
-        doUpdate(title, content, files, board);
-    }
+//    @Transactional  //totalService로 이전.
+//    public void update(String writer, String title, String content,
+//                     @Nullable List<fileTransferDto> files,Long board_id) throws IOException {
+//        board board = validationUpdateBoard(writer, board_id);
+//        doUpdate(title, content, files, board);
+//    }
 
     //게시글 수정시 적은글에 대한 정보를 반환.
     @Transactional
