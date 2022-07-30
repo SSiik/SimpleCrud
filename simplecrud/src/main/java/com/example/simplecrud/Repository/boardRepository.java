@@ -3,10 +3,7 @@ package com.example.simplecrud.Repository;
 import com.example.simplecrud.Domain.Entity.board;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
@@ -19,6 +16,17 @@ public interface boardRepository extends JpaRepository<board,Long>,boardReposito
     @EntityGraph(attributePaths = {"list"})
     @Query("select distinct b from board b where b.id =:id")
     Optional<board> findBoardEntitygraph(@Param("id") Long id); //data jpa는 자동으로 id를 인식으로 동작.
+
+
+    @Query("select  b from board b where b.id =:id and b.writer =:writer")
+    Optional<board> findBoardWithValidation(@Param("id") Long id,@Param("writer") String writer);
+
+    @Modifying
+    @Query("update board b " +
+            "set b.title =:title, b.content =:content, b.haveFile =:haveFile " +
+            "where b.id =:id")
+    void updateBoardWithParam(@Param("id") Long id,@Param("title") String title
+            ,@Param("content") String content,@Param("haveFile") boolean haveFile);
 
     @Query(value = "select b from board b")
     Page<board> findAllByPage(Pageable pageable);

@@ -84,11 +84,10 @@ public class BoardService {
     public board validationUpdateBoard(String ide,Long id){
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
-        Optional<board> byId = boardRepository.findById(id);
+        board board = boardRepository.findBoardWithValidation(id, ide)
+                .orElseThrow(() -> new RuntimeException("게시글이 없거나 권한이 없는 사용자입니다."));
         log.info("게시글 , 사용자를 동시에 확인하는중입니다!!!!!!!!!!!!");
-        if (byId.isEmpty()) throw new RuntimeException("해당하는 게시글을 찾을수없습니다.");
-        if (!byId.get().getWriter().equals(ide)) throw new RuntimeException("수정권한이 없는 사용자입니다.");
-        return byId.get(); //정말로 있는지 검증. 있다면 Id를 return.
+        return board;
     }
 
     public Object validationBoardWithComment(Long board_id,@Nullable Long comment_id){
@@ -155,7 +154,7 @@ public class BoardService {
 //    public void update(String writer, String title, String content,
 //                     @Nullable List<fileTransferDto> files,Long board_id) throws IOException {
 //        board board = validationUpdateBoard(writer, board_id);
-//        doUpdate(title, content, files, board);
+//        doUpdate(title, content, files, board_id,board);
 //    }
 
     //게시글 수정시 적은글에 대한 정보를 반환.
@@ -344,39 +343,39 @@ public class BoardService {
     }
 
 
-    @Async
+    @Async @Transactional
     public void doUpdate(String title, String content, @Nullable List<fileTransferDto> files, board board) throws IOException {
+        //여기서 들어온 board는 업데이트할 정보라고 생각하면 됩니다.
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
+//        board board = boardRepository.findBoardWithValidation(board_id, writer)
+//                .orElseThrow(() -> new RuntimeException("게시글이 없거나 권한이 존재하지 않습니다."));
         if (files != null) { //새로 들어오는 첨부파일이 있다는 얘기.
             if (!board.isHaveFile()) {
                 //1 . 게시글은 있지만 첨부파일은 없었던경우. 그러면 이제 들어온 파일은 다 넣어주면 됩니다.
                 List<file> lists = new ArrayList<>();
-                List<file> parts = new ArrayList<>();
                 for (fileTransferDto file : files) {
                     String originalName = file.getOriginalFileName();
                     log.info("실제 파일저장 시작입니다..");
                     AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
                     file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
-                    parts.add(fileInfo);
-                    fileInfo.setBoard(board); //외래키 설정.
+                    fileInfo.setBoard(board); //파라미터로 받아오는거긴 하지만, 내부에 id는 있으니 설정은 될겁니다.
                     lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
                 }
-                board.setTitle(title);
-                board.setContent(content);
-                board.setHaveFile(true);
-                board.setList(parts);
+//                board.setTitle(title);
+//                board.setContent(content);
+//                board.setHaveFile(true);
                 fileJDbcRepository.saveAll(lists); //bulk insert를 IDENTITY전략속에서, JDBCtemplate을 이용.
+                boardRepository.updateBoardWithParam(board.getId(),title,content,true);
             } else {
                 //2 . 게시글도 있고, 첨부파일도 기존에 있었던경우. 이러면 좀 갈아줘야합니다.
-                List<file> parts = new ArrayList<>();
+
                 awsS3Service.deleteAll("upload", board.getId()); //사전작업1, s3에 파일삭제
                 fileRepository.deleteAllByBoard(board.getId()); //사전작업2 , DB에서 bulk delete.
                 //자 이 bulk연산이후에 자동 flush를 하지 않을겁니다. 일부러.
                 // 그리고 영속성컨텍스트도 안비울겁니다 일부러.
-                board.setTitle(title);
-                board.setContent(content);
-                board.setList(parts);  //board관련 file들을 가져오기 싫기때문에, 그냥 아애 비어있는 list를 채워버리는 느낌?
+//                board.setTitle(title);
+//                board.setContent(content);
                 //설마 프록시와 충돌하려나?
                 List<file> lists = new ArrayList<>();
                 for (fileTransferDto file : files) {
@@ -384,21 +383,21 @@ public class BoardService {
                     log.info("실제 파일저장 시작입니다..");
                     AwsS3 upload = awsS3Service.uploads(file, "upload", board.getId()); //awsS3에 저장한 이후에는 DB에 저장할것도 필요합니다.
                     file fileInfo = new file(originalName, upload.getKey(), upload.getPath()); //원래파일이름, 바뀐파일(저장된)이름 , 파일의URL정도.
-                    board.getList().add(fileInfo); //앞에서 비운후에 새롭게 넣어줍니다.
+//                    board.getList().add(fileInfo); //앞에서 비운후에 새롭게 넣어줍니다. 여기서 프록시관련 오류?
                     fileInfo.setBoard(board); //외래키 설정.
                     lists.add(fileInfo); //lists에 이제 저장하기 위해서 채웁니다.
                 }
                 fileJDbcRepository.saveAll(lists);
+                boardRepository.updateBoardWithParam(board.getId(),title,content,true);
             }
         } else { //넘어온 첨부파일이 없는경우.
             List<file> parts = new ArrayList<>();
             board.setTitle(title);
             board.setContent(content);
             board.setHaveFile(false);
-            board.setList(parts); //여기도 일단 좀 강제로 setting해주는 느낌으로 갑시다. 우린 일대다 fetch join을 하기싫기때문에 이렇게했다.
-            //기존에도 없었던 경우면 사실상 처리할 필요가없습니다.
+            board.setList(parts);
             if (board.isHaveFile()) { //기존에 파일이 있었다면?
-                awsS3Service.deleteAll("upload", board.getId()); //기존에 있던 파일을 삭제.
+                awsS3Service.deleteAll("upload", board.getId());
                 fileRepository.deleteAllByBoard(board.getId());             //기존에 있던 파일정보를 DB에서 삭제.
             }
         }

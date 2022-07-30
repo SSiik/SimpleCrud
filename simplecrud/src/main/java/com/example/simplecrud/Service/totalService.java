@@ -11,22 +11,23 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.persistence.EntityManager;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class totalService {
-    private final boardRepository boardRepository;
-    private final fileRepository fileRepository;
-    private final commentRepository commentRepository;
+
     private final BoardService boardService;
+    private final EntityManager em;
 
     @Transactional
     public void update(String writer, String title, String content,
                        @Nullable List<fileTransferDto> files, Long board_id) throws IOException {
         board board = boardService.validationUpdateBoard(writer, board_id);
-        boardService.doUpdate(title, content, files, board);
+        boardService.doUpdate(title, content, files,board);
     }
 }
