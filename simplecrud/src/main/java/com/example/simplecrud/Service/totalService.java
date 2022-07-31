@@ -44,10 +44,15 @@ public class totalService {
         //실제로 우린 삭제하지 않고, "임의의 데이터로" 바꿔서 넣게 될겁니다. 다른게시판들처럼 삭제된 댓글입니다로 치환할 생각입니다.
         boardService.doDeleteComment(comment);
     }
+    /*
+    *  자식이 있다면, 현재의 상태만 delete로 바꿉니다. -> 다른 조치를 할수 없기 때문.
+    *  자식이 없다면?(삭제 요청이 들어온상태고?) -> 그러면 자기를 통해서 위쪽으로 propagation될 여지가 있습니다.
+    * */
 
     @Transactional
     //등록을 하는과정은 비동기로 한번 처리해봅시다. 여기 검증로직부터 다시 해야함.
     public void doComment(String ide, String content, Long board_id, @Nullable Long comment_id) {
+
         Object entity = boardService.validationBoardWithComment(board_id, comment_id);
         boardService.executeComment(ide, content,entity);
     }

@@ -28,6 +28,7 @@ public interface commentRepository extends JpaRepository<comment,Long> {
     @Query(value = "select c from comment c " +
             "left join fetch c.parent " +
             "join fetch c.board "+
+            "left join fetch c.children "+
             "where c.id=:id")
     Optional<comment> findByIdWithBoardToDelete(@Param("id") Long id);
 

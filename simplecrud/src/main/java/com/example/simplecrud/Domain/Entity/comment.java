@@ -75,6 +75,7 @@ public class comment extends TimeEntity{
 
     public Optional<comment> findDeletableComment() {
         return hasChildren() ? Optional.empty() : Optional.of(findDeletableCommentByParent());
+        //hasChildren에서 children lazy로딩 -> 그 다음의 도착지의 children을 확인해야하니 children에 대해서 2번의 쿼리가 일어난거.
     }
 
     private comment findDeletableCommentByParent() { // 1

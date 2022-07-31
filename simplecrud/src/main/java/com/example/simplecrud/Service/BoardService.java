@@ -253,7 +253,8 @@ public class BoardService {
         System.out.println("=========================================================================");
         comment.findDeletableComment().ifPresentOrElse(c -> commentRepository.delete(c), () -> comment.delete());
         //ifPresentOrElse로 Empty 일수도 그러면 그냥, 현재 댓글만 임시상태표시로. 삭제가능한 지점을 찾으면 Repository이용.
-        boardRepository.updateBoardWithCommentNumMinus(comment.getBoard().getId());
+        comment.getBoard().setCommentNum(comment.getBoard().getCommentNum()-1);//어차피 불러오는김에 dirty checking으로 처리.
+        //boardRepository.updateBoardWithCommentNumMinus(comment.getBoard().getId());
         //다른쓰레드 이므로 직접적인 수동 update쿼리를 이용한다.
     }
 
