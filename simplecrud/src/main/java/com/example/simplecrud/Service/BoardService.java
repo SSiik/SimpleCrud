@@ -90,7 +90,7 @@ public class BoardService {
         return board;
     }
 
-    public Object validationBoardWithComment(Long board_id,@Nullable Long comment_id){
+    public Object validationBoardWithComment(Long board_id , @Nullable Long comment_id){
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
         if(comment_id == null){ //루트댓글을 위한 검증을 실시.
@@ -109,7 +109,7 @@ public class BoardService {
     public comment validationBoardWithDelete(Long comment_id,String ide){
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
-        comment comment = commentRepository.findByIdWithBoardToDelete(comment_id)
+        comment comment = commentRepository.findById(comment_id)
                 .orElseThrow(() -> new RuntimeException("존재하지 않는 댓글 혹은 게시글입니다."));//여기서 오면 게시글까지 있다는거.
         if(!comment.getWriter().equals(ide)){
             throw new RuntimeException("삭제권한이 없는 사용자입니다.");
@@ -187,17 +187,17 @@ public class BoardService {
     //글 삭제.
     //여기서 하나 잡을가정이, 글삭제를 뭐 글상세보기에서 하든, 마이페이지에서 하던간에. 이 2개의 페이지에는 글쓴사람의 ide가 있을거다.
     //이걸 같이 넘겨줘서 비교하는걸로 갑시다. 권한있는지 판단하는건 이건 솔직히 너무 힘든거 같긴합니다. 이거 찾으로 쿼리타는게.
-    @Transactional
-    public void deleteBoard(Long board_id, String ide) {
-        board board = validationUpdateBoard(ide, board_id);
-        doDelete(board);
-        /*
-         * 게시글 삭제 과정
-         * 1. s3에서 board관련 파일 전부삭제
-         * 2. board관련 파일들을 전부 삭제 (bulk delete 사용)
-         * 3. board 게시글 자체를 삭제.
-         * */
-    }
+//    @Transactional
+//    public void deleteBoard(Long board_id, String ide) {
+//        board board = validationUpdateBoard(ide, board_id);
+//        doDelete(board);
+//        /*
+//         * 게시글 삭제 과정
+//         * 1. s3에서 board관련 파일 전부삭제
+//         * 2. board관련 파일들을 전부 삭제 (bulk delete 사용)
+//         * 3. board 게시글 자체를 삭제.
+//         * */
+//    }
 
     public Page<listDto> listDto(int num) { //가져올때 5개씩 끊어서 페이징을 하겟다..
         //페이지번호는 이제 시작이 0번 페이지부터 시작.
@@ -219,62 +219,42 @@ public class BoardService {
         return map;
     }
 
-    @Transactional
-     //등록을 하는과정은 비동기로 한번 처리해봅시다. 여기 검증로직부터 다시 해야함.
-    public void doComment(String ide, String content, Long board_id, @Nullable Long comment_id) {
+    @Async @Transactional
+    public void executeComment(String ide, String content, Object entity) {
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
-        if (comment_id == null) { //대댓글이아님.
-            board board = (board)validationBoardWithComment(board_id, null);
-            executeComment(ide, content, board,null);
-
-        } else { //대댓글 상황, 대상이존재.
-            comment parentcomment = (comment)validationBoardWithComment(board_id, comment_id);
-            executeComment(ide, content, parentcomment.getBoard(), parentcomment);
-        }
-
-    }
-
-    @Async
-    public void executeComment(String ide, String content, board board , @Nullable comment parentComment) {
-        System.out.println(Thread.currentThread().getId());
-        System.out.println("=========================================================================");
-        if(parentComment == null) {
+        if(entity instanceof board) {
+            board board =(board)entity; //entity를 이제 board로 변환.
             comment comm = new comment(content, board, ide, false); //일단기본적인 값들 설정.
             commentRepository.save(comm);
+            boardRepository.updateBoardWithCommentNumPlus(board.getId());
         }
-        else{ //comment가 있는경우는 대댓글 작성으로 동작.
-            comment comm = new comment(content, board, ide,false);
+        else if (entity instanceof comment){
+            comment parentComment = (comment) entity;
+            comment comm = new comment(content, parentComment.getBoard(), ide,false);
             comm.setRelationship(parentComment); //여기서 서로 부모를추가하고, 자식을 추가하는 관계를 맺음.
             commentRepository.save(comm);
-        }
-        try {
-            board.setCommentNum(board.getCommentNum() + 1);
-        } catch(OptimisticLockException e){
-            board entity = (board) e.getEntity();
-            entity.setCommentNum(entity.getCommentNum() + 1); //재시도.
+            boardRepository.updateBoardWithCommentNumPlus(parentComment.getBoard().getId());
         }
     }
 
-    @Transactional
-    public void deleteComment(Long comment_id,String ide){ //댓글에 관련된 대댓글은 삭제하지 않도록.
-        comment comment = validationBoardWithDelete(comment_id, ide);
-        //실제로 우린 삭제하지 않고, "임의의 데이터로" 바꿔서 넣게 될겁니다. 다른게시판들처럼 삭제된 댓글입니다로 치환할 생각입니다.
-        doDelete(comment);
-    }
+//    @Transactional
+//    public void deleteComment(Long comment_id,String ide){ //댓글에 관련된 대댓글은 삭제하지 않도록.
+//        comment comment = validationBoardWithDelete(comment_id, ide);
+//        //실제로 우린 삭제하지 않고, "임의의 데이터로" 바꿔서 넣게 될겁니다. 다른게시판들처럼 삭제된 댓글입니다로 치환할 생각입니다.
+//        doDelete(comment);
+//    }
 
-    @Async
-    private void doDelete(comment comment) {  //동시성에 대한 PESSIMISTIC LOCK을 걸어야할까?
+    @Async @Transactional
+    public void doDeleteComment(comment comment1) {  //동시성에 대한 PESSIMISTIC LOCK을 걸어야할까?
+        //일단 비동기로 처리되니 영속성컨텍스트에 번거롭지만 다시 초기화합니다 쿼리수+1
+        comment comment = commentRepository.findByIdWithBoardToDelete(comment1.getId()).get();
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
         comment.findDeletableComment().ifPresentOrElse(c -> commentRepository.delete(c), () -> comment.delete());
         //ifPresentOrElse로 Empty 일수도 그러면 그냥, 현재 댓글만 임시상태표시로. 삭제가능한 지점을 찾으면 Repository이용.
-        try {
-            comment.getBoard().setCommentNum(comment.getBoard().getCommentNum() - 1); //댓글삭제했으므로 하나를 지움.
-        } catch(OptimisticLockException e){
-            board entity = (board) e.getEntity();
-            entity.setCommentNum(entity.getCommentNum()+1);
-        }
+        boardRepository.updateBoardWithCommentNumMinus(comment.getBoard().getId());
+        //다른쓰레드 이므로 직접적인 수동 update쿼리를 이용한다.
     }
 
 
@@ -345,7 +325,6 @@ public class BoardService {
 
     @Async @Transactional
     public void doUpdate(String title, String content, @Nullable List<fileTransferDto> files, board board) throws IOException {
-        //여기서 들어온 board는 업데이트할 정보라고 생각하면 됩니다.
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
 //        board board = boardRepository.findBoardWithValidation(board_id, writer)
@@ -391,19 +370,15 @@ public class BoardService {
                 boardRepository.updateBoardWithParam(board.getId(),title,content,true);
             }
         } else { //넘어온 첨부파일이 없는경우.
-            List<file> parts = new ArrayList<>();
-            board.setTitle(title);
-            board.setContent(content);
-            board.setHaveFile(false);
-            board.setList(parts);
             if (board.isHaveFile()) { //기존에 파일이 있었다면?
                 awsS3Service.deleteAll("upload", board.getId());
                 fileRepository.deleteAllByBoard(board.getId());             //기존에 있던 파일정보를 DB에서 삭제.
             }
+            boardRepository.updateBoardWithParam(board.getId(),title,content,false);
         }
     }
 
-    @Async
+    @Async @Transactional
     public void doDelete(board board) {
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
@@ -418,6 +393,7 @@ public class BoardService {
             //쿼리를 2번이나 타긴하지만, 일대다 상황에서 risk를 감수하는거보단 날겁니다.
         }
         commentRepository.deleteAllByBoard(board.getId());
-        boardRepository.deleteById(board.getId());//삭제해버립니다.
+        boardRepository.deleteOne(board.getId()); // 직접접근하는 native query로 바꿔봣습니다.
+                                                  // spring data jpa대신에 native query사용으로 변경.
     }
 }

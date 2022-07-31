@@ -28,6 +28,18 @@ public interface boardRepository extends JpaRepository<board,Long>,boardReposito
     void updateBoardWithParam(@Param("id") Long id,@Param("title") String title
             ,@Param("content") String content,@Param("haveFile") boolean haveFile);
 
+    @Modifying
+    @Query("update board b " +
+            "set b.commentNum = b.commentNum + 1" +
+            "where b.id =:id")
+    void updateBoardWithCommentNumPlus(@Param("id") Long id);
+
+    @Modifying
+    @Query("update board b " +
+            "set b.commentNum = b.commentNum - 1" +
+            "where b.id =:id")
+    void updateBoardWithCommentNumMinus(@Param("id") Long id);
+
     @Query(value = "select b from board b")
     Page<board> findAllByPage(Pageable pageable);
 
@@ -36,7 +48,9 @@ public interface boardRepository extends JpaRepository<board,Long>,boardReposito
     Page<board> findPostByContent(Pageable pageable,@Param("content") String content);
 
 
-    void deleteById(Long id);
+    @Modifying               // 삭제같은경우, @Modifying을 넣어줘야 에러가 안나는거 같습니다.
+    @Query(nativeQuery = true,value = "delete from board where id =:id")
+    void deleteOne(@Param("id") Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(value = "select distinct b from board b left join fetch b.list where b.id =:id")

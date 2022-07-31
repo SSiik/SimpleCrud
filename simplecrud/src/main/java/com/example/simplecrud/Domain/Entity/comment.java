@@ -65,7 +65,7 @@ public class comment extends TimeEntity{
 
     public void setRelationship(comment parent){
         this.setParent(parent);
-        parent.getChildren().add(this);
+//        parent.getChildren().add(this);  //일단 여긴 주석처리 해봅시다
     }
 
     public void delete(){

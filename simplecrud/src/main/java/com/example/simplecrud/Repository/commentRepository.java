@@ -32,4 +32,6 @@ public interface commentRepository extends JpaRepository<comment,Long> {
     Optional<comment> findByIdWithBoardToDelete(@Param("id") Long id);
 
 
+
+
 }

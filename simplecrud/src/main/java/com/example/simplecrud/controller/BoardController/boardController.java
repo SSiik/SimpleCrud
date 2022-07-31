@@ -54,10 +54,10 @@ public class boardController {
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
         if(commentDto.getComment_id()==null) {
-            boardService.doComment(ide,commentDto.getContent(),commentDto.getBoard_id(),null);
+            totalService.doComment(ide,commentDto.getContent(),commentDto.getBoard_id(),null);
         }
         else {
-            boardService.doComment(ide,commentDto.getContent(),commentDto.getBoard_id(),commentDto.getComment_id());
+            totalService.doComment(ide,commentDto.getContent(),commentDto.getBoard_id(),commentDto.getComment_id());
         }
         return "OK";
     }
@@ -69,12 +69,12 @@ public class boardController {
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         //댓글id가 넘어오냐 안오냐에 따라서 대댓글인지 댓글인지 판단합니다.
         //일반 댓글이라면 아직 id가 없고, 대댓글이면 대상댓글에 id가 존재하겠죠.
-        boardService.deleteComment(id,ide);
+        totalService.deleteComment(id,ide);
         return "OK";
     }
 
-    //인터셉터에서 로그인여부판단, 여기선 로그인이 됬다고 판단 진행
-    @PostMapping("/board/private/post") //글 작성
+
+    @PostMapping("/board/private/post") //게시글 작성
     public String post(@Validated @ModelAttribute postDto postDto ,
                        HttpServletRequest request) throws IOException {
         System.out.println(Thread.currentThread().getId());
@@ -94,7 +94,7 @@ public class boardController {
         return "OK";
     }
 
-    @PostMapping("/board/private/update")  //글 업데이트
+    @PostMapping("/board/private/update")  //게시글 업데이트
     public String update(@Validated @ModelAttribute postDto postDto,HttpServletRequest request,
                          Long board_id) throws IOException {
         System.out.println(Thread.currentThread().getId());
@@ -115,20 +115,19 @@ public class boardController {
         return "OK";
     }
 
-    @GetMapping("/board/private/info") //게시글 수정 버튼을 눌럿을때 정보를 가져와야함.
+    @GetMapping("/board/private/info") //게시글 수정 -> 정보 가져오기.
     public updateDto beforeUpdate(HttpServletRequest request,
                          Long board_id) throws IOException {
         String ide = (String)request.getAttribute("userId"); //정보 획득.
         return boardService.getPost(board_id,ide);
-
     }
 
-    @PostMapping("/board/private/delete")  //글 삭제
+    @PostMapping("/board/private/delete")  //게시글 삭제
     public String delete(HttpServletRequest request,Long board_id) throws IOException {
         System.out.println(Thread.currentThread().getId());
         System.out.println("=========================================================================");
         String ide = (String)request.getAttribute("userId"); //정보 획득. 비동기메소드 전까지는 동기적으로 실행된다.
-        boardService.deleteBoard(board_id,ide);
+        totalService.delete(ide,board_id);
         return "OK";
     }
 }
